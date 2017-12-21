@@ -7,6 +7,16 @@ cd
 export CROSS_COMPILE=aarch64-linux-gnu-
 export ARCH=arm64
 
+JOBS=2
+
+download_rootfs() { (
+    cd Downloads
+
+    wget https://releases.linaro.org/debian/images/developer-arm64/latest/linaro-stretch-developer-20171109-88.tar.gz
+    sudo tar xzvf linaro-stretch-developer-20171109-88.tar.gz > /dev/null
+    sudo mv binary ../Build/rootfs
+) }
+
 download_linux() { (
     cd Downloads
 
@@ -19,30 +29,34 @@ build_linux() { (
     cd Build/linux-hikey960
 
     make defconfig
-    make -j4
+    make -j$JOBS
+) }
 
-    cp arch/$ARCH/boot/Image ..
-    cp arch/$ARCH/boot/dts/hisilicon/hi3660-hikey960.dtb ..
+install_linux() { (
+    cd Build/linux-hikey960
+
+    # Image
+    sudo cp arch/$ARCH/boot/Image ../rootfs/boot
+    sudo cp arch/$ARCH/boot/dts/hisilicon/hi3660-hikey960.dtb ../rootfs/boot
+
+    # Modules
+    sudo -E make INSTALL_MOD_PATH=$PWD/../rootfs modules_install
 
     make clean
 ) }
 
-download_rootfs() { (
-    cd Downloads
-
-    wget https://releases.linaro.org/debian/images/developer-arm64/latest/linaro-stretch-developer-20171109-88.tar.gz
-    sudo tar xzvf linaro-stretch-developer-20171109-88.tar.gz > /dev/null
-    sudo mv binary ../Build/rootfs
+download_grub() { (
+    cd Build
+    git clone https://git.savannah.gnu.org/git/grub.git --depth 1
 ) }
 
 build_grub() { (
-    cd Build
+    cd Build/grub
 
-    git clone https://git.savannah.gnu.org/git/grub.git --depth 1
-    cd grub
     ./autogen.sh
     ./configure --prefix=/usr --target=aarch64-linux-gnu --with-platform=efi
-    make -j2
+    make -j$JOBS
+
     mkdir -p ../grub-install
     make DESTDIR=$PWD/../grub-install install
 ) }
@@ -69,7 +83,7 @@ gzio help linux loadenv lsefi normal part_gpt part_msdos read regexp search \
 search_fs_file search_fs_uuid search_label terminal terminfo test tftp time halt reboot"
     grub-install/usr/bin/grub-mkimage \
         --config grub.config \
-        --dtb hi3660-hikey960.dtb \
+        --dtb rootfs/boot/hi3660-hikey960.dtb \
         --directory=$PWD/grub-install/usr/lib/grub/arm64-efi \
         --output=grubaa64.efi \
         --format=arm64-efi \
@@ -88,25 +102,16 @@ download_wifi_firmware() { (
     cp linux-firmware/ti-connectivity/wl18xx-fw-4.bin ../Build
 ) }
 
-arrange_rootfs() { (
+install_wifi_firmware() { (
     cd Build
 
-    # Image
-    sudo cp Image rootfs/boot/
-    sudo cp hi3660-hikey960.dtb rootfs/boot/
-
-    # Modules
-    (
-        cd linux-hikey960
-        sudo make INSTALL_MOD_PATH=$PWD/../rootfs modules_install
-    )
-
-    # Wi-Fi firmware
     sudo mkdir -p rootfs/lib/firmware/ti-connectivity
     sudo cp wl18xx-fw-4.bin rootfs/lib/firmware/ti-connectivity/
+) }
 
-    # grub.cfg
-    sudo mkdir -p rootfs/boot/grub
+install_grub_cfg() { (
+    cd Build
+
     cat > grub.cfg << 'EOF'
 set default="0"
 set timeout=30
@@ -127,13 +132,15 @@ menuentry 'Fastboot' {
     chainloader ($boot_part)/EFI/BOOT/fastboot.efi
 }
 EOF
+
+    sudo mkdir -p rootfs/boot/grub
     sudo mv grub.cfg rootfs/boot/grub/
 ) }
 
 create_sparce_rootfs_image() { (
     cd Build
 
-    dd if=/dev/zero of=rootfs.img bs=1M count=4096
+    dd if=/dev/zero of=rootfs.img bs=1M count=2048
     mkfs.ext4 -F -L rootfs rootfs.img
     sudo mount -o loop rootfs.img loop
 
@@ -159,13 +166,19 @@ flash() { (
 ) }
 
 mkdir -p Downloads Build/loop
+
+download_rootfs
 download_linux
 build_linux
-download_rootfs
-download_uefi
+install_linux
+download_grub
 build_grub
+download_uefi
 install_grub_uefi
 download_wifi_firmware
-arrange_rootfs
+install_wifi_firmware
+install_grub_cfg
 create_sparce_rootfs_image
 flash
+
+echo "Finished successfully"
