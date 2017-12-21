@@ -111,8 +111,12 @@ menuentry 'Fastboot' {
 }
 EOF
     sudo mv grub.cfg rootfs/boot/grub/
+) }
 
-    dd if=/dev/zero of=rootfs.img bs=1M count=2096
+create_sparce_rootfs_image() { (
+    cd Build
+
+    dd if=/dev/zero of=rootfs.img bs=1M count=4096
     mkfs.ext4 -F -L rootfs rootfs.img
     sudo mount -o loop rootfs.img loop
 
@@ -144,4 +148,5 @@ download_uefi
 build_grub
 install_grub_uefi
 arrange_rootfs
+create_sparce_rootfs_image
 flash
