@@ -81,6 +81,13 @@ search_fs_file search_fs_uuid search_label terminal terminfo test tftp time halt
     sudo umount loop
 ) }
 
+download_wifi_firmware() { (
+    cd Downloads
+
+    git clone git://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git
+    cp linux-firmware/ti-connectivity/wl18xx-fw-4.bin ../Build
+) }
+
 arrange_rootfs() { (
     cd Build
 
@@ -111,6 +118,10 @@ menuentry 'Fastboot' {
 }
 EOF
     sudo mv grub.cfg rootfs/boot/grub/
+
+    # Wi-Fi firmware
+    sudo mkdir -p rootfs/lib/firmware/ti-connectivity
+    sudo cp wl18xx-fw-4.bin rootfs/lib/firmware/ti-connectivity/
 ) }
 
 create_sparce_rootfs_image() { (
@@ -136,8 +147,9 @@ flash() { (
     # sudo fastboot flash system rootfs.sparse.img
 
     echo "Please flash boot-fat.uefi.img and rootfs.sparse.img manually"
-    cp boot-fat.uefi.img ~/Shared
-    cp rootfs.sparse.img ~/Shared
+    date=$(date "+%Y%m%d-%H%M%S")
+    cp boot-fat.uefi.img ~/Shared/boot-fat-$date.uefi.img
+    cp rootfs.sparse.img ~/Shared/rootfs-$date.sparse.img
 ) }
 
 mkdir -p Downloads Build/loop
@@ -147,6 +159,7 @@ download_rootfs
 download_uefi
 build_grub
 install_grub_uefi
+download_wifi_firmware
 arrange_rootfs
 create_sparce_rootfs_image
 flash
