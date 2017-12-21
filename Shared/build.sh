@@ -23,6 +23,8 @@ build_linux() { (
 
     cp arch/$ARCH/boot/Image ..
     cp arch/$ARCH/boot/dts/hisilicon/hi3660-hikey960.dtb ..
+
+    make clean
 ) }
 
 download_rootfs() { (
@@ -31,14 +33,6 @@ download_rootfs() { (
     wget https://releases.linaro.org/debian/images/developer-arm64/latest/linaro-stretch-developer-20171109-88.tar.gz
     sudo tar xzvf linaro-stretch-developer-20171109-88.tar.gz > /dev/null
     sudo mv binary ../Build/rootfs
-) }
-
-download_uefi() { (
-    cd Downloads
-
-    wget https://builds.96boards.org/releases/hikey/linaro/debian/latest/boot-fat.uefi.img.gz
-    gzip -d boot-fat.uefi.img.gz
-    mv boot-fat.uefi.img ../Build/
 ) }
 
 build_grub() { (
@@ -53,17 +47,34 @@ build_grub() { (
     make DESTDIR=$PWD/../grub-install install
 ) }
 
+download_uefi() { (
+    cd Downloads
+
+    wget https://builds.96boards.org/releases/hikey/linaro/debian/latest/boot-fat.uefi.img.gz
+    gzip -d boot-fat.uefi.img.gz
+    mv boot-fat.uefi.img ../Build/
+) }
+
 install_grub_uefi() { (
     cd Build
 
-    cat > grub.config << EOF
-    search.fs_label rootfs root
-    set prefix=(\$root)/boot/grub
-    configfile \$prefix/grub.cfg
+    cat > grub.config << 'EOF'
+search.fs_label rootfs root
+set prefix=($root)/boot/grub
+configfile $prefix/grub.cfg
 EOF
 
-    GRUB_MODULES="boot chain configfile echo efinet eval ext2 fat font gettext gfxterm gzio help linux loadenv lsefi normal part_gpt part_msdos read regexp search search_fs_file search_fs_uuid search_label terminal terminfo test tftp time"
-    grub-install/usr/bin/grub-mkimage --config grub.config --dtb hi3660-hikey960.dtb --directory=$PWD/grub-install/usr/lib/grub/arm64-efi --output=grubaa64.efi --format=arm64-efi --prefix="/boot/grub" $GRUB_MODULES
+    GRUB_MODULES="boot chain configfile echo efinet eval ext2 fat font gettext gfxterm \
+gzio help linux loadenv lsefi normal part_gpt part_msdos read regexp search \
+search_fs_file search_fs_uuid search_label terminal terminfo test tftp time halt reboot"
+    grub-install/usr/bin/grub-mkimage \
+        --config grub.config \
+        --dtb hi3660-hikey960.dtb \
+        --directory=$PWD/grub-install/usr/lib/grub/arm64-efi \
+        --output=grubaa64.efi \
+        --format=arm64-efi \
+        --prefix="/boot/grub" \
+        $GRUB_MODULES
 
     sudo mount -o loop boot-fat.uefi.img loop
     sudo cp grubaa64.efi loop/EFI/BOOT
@@ -73,29 +84,31 @@ EOF
 arrange_rootfs() { (
     cd Build
 
+    # Image
     sudo cp Image rootfs/boot/
     sudo cp hi3660-hikey960.dtb rootfs/boot/
 
+    # grub.cfg
     sudo mkdir -p rootfs/boot/grub
-    cat > grub.cfg << EOF
-    set default="0"
-    set timeout=30
+    cat > grub.cfg << 'EOF'
+set default="0"
+set timeout=30
 
-    menuentry 'Debian GNU/Linux' {
-      search.fs_label rootfs root
-      set root=(\$root)
+menuentry 'Debian GNU/Linux' {
+    search.fs_label rootfs root
+    set root=($root)
 
-      echo 'Loading linux-hikey960 v4.14-rc7 ...'
-      linux /boot/Image console=tty0 console=ttyAMA6,115200n8 root=/dev/sdd10 rootwait rw efi=noruntime
+    echo 'Loading linux-hikey960 v4.14-rc7 ...'
+    linux /boot/Image console=tty0 console=ttyAMA6,115200n8 root=/dev/sdd10 rootwait rw efi=noruntime
 
-      echo 'Loading devicetree ...'
-      devicetree /boot/hi3660-hikey960.dtb
-    }
+    echo 'Loading devicetree ...'
+    devicetree /boot/hi3660-hikey960.dtb
+}
 
-    menuentry 'Fastboot' {
-        search.fs_label boot boot_part
-        chainloader (\$boot_part)/EFI/BOOT/fastboot.efi
-    }
+menuentry 'Fastboot' {
+    search.fs_label boot boot_part
+    chainloader ($boot_part)/EFI/BOOT/fastboot.efi
+}
 EOF
     sudo mv grub.cfg rootfs/boot/grub/
 
