@@ -84,7 +84,7 @@ search_fs_file search_fs_uuid search_label terminal terminfo test tftp time halt
 download_wifi_firmware() { (
     cd Downloads
 
-    git clone git://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git
+    git clone git://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git --depth 1
     cp linux-firmware/ti-connectivity/wl18xx-fw-4.bin ../Build
 ) }
 
@@ -94,6 +94,16 @@ arrange_rootfs() { (
     # Image
     sudo cp Image rootfs/boot/
     sudo cp hi3660-hikey960.dtb rootfs/boot/
+
+    # Modules
+    (
+        cd linux-hikey960
+        sudo make INSTALL_MOD_PATH=$PWD/../rootfs modules_install
+    )
+
+    # Wi-Fi firmware
+    sudo mkdir -p rootfs/lib/firmware/ti-connectivity
+    sudo cp wl18xx-fw-4.bin rootfs/lib/firmware/ti-connectivity/
 
     # grub.cfg
     sudo mkdir -p rootfs/boot/grub
@@ -118,10 +128,6 @@ menuentry 'Fastboot' {
 }
 EOF
     sudo mv grub.cfg rootfs/boot/grub/
-
-    # Wi-Fi firmware
-    sudo mkdir -p rootfs/lib/firmware/ti-connectivity
-    sudo cp wl18xx-fw-4.bin rootfs/lib/firmware/ti-connectivity/
 ) }
 
 create_sparce_rootfs_image() { (
