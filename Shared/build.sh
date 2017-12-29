@@ -102,11 +102,20 @@ download_wifi_firmware() { (
     cp linux-firmware/ti-connectivity/wl18xx-fw-4.bin ../Build
 ) }
 
-install_wifi_firmware() { (
+setup_wifi() { (
     cd Build
 
     sudo mkdir -p rootfs/lib/firmware/ti-connectivity
     sudo cp wl18xx-fw-4.bin rootfs/lib/firmware/ti-connectivity/
+
+    cat >> rootfs/etc/network/interfaces << EOF
+
+auto lo wlan0
+iface lo inet loopback
+allow-hotplug wlan0
+iface wlan0 inet dhcp
+wpa-conf /etc/wpa_supplicant/wpa_supplicant.conf
+EOF
 ) }
 
 install_grub_cfg() { (
@@ -140,7 +149,7 @@ EOF
 create_sparce_rootfs_image() { (
     cd Build
 
-    dd if=/dev/zero of=rootfs.img bs=1M count=2048
+    dd if=/dev/zero of=rootfs.img bs=1M count=4096
     mkfs.ext4 -F -L rootfs rootfs.img
     sudo mount -o loop rootfs.img loop
 
@@ -176,9 +185,10 @@ build_grub
 download_uefi
 install_grub_uefi
 download_wifi_firmware
-install_wifi_firmware
+setup_wifi
 install_grub_cfg
 create_sparce_rootfs_image
 flash
 
 echo "Finished successfully"
+echo "Please config wpa_supplicant.conf manually"
